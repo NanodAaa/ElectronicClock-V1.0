@@ -1,0 +1,1 @@
+"..\Source\ElectricClock.c" OPTIMIZE (8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listings\ElectricClock.lst) TABS (2) OBJECT(.\Objects\ElectricClock.obj)

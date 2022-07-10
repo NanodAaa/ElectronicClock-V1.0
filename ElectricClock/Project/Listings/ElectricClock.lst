@@ -1,0 +1,491 @@
+C51 COMPILER V9.60.0.0   ELECTRICCLOCK                                                     07/08/2022 00:05:41 PAGE 1   
+
+
+C51 COMPILER V9.60.0.0, COMPILATION OF MODULE ELECTRICCLOCK
+OBJECT MODULE PLACED IN .\Objects\ElectricClock.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE ..\Source\ElectricClock.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PR
+                    -INT(.\Listings\ElectricClock.lst) TABS(2) OBJECT(.\Objects\ElectricClock.obj)
+
+line level    source
+
+   1          /*
+   2          *   EletricClock.c
+   3          */
+   4          
+   5          
+   6          //#include "reg52.h"
+   7          #include "ElectricClock.h"
+   8          #include "stdio.h"
+   9          
+  10          BOOL TimeAdjustFlag;
+  11          BOOL SetAlarmFlag;
+  12          
+  13          ReadTime SAlarmTime;
+  14          ReadTime SSavedTime;
+  15          ReadTime SReadTime;
+  16          
+  17          
+  18          // 独立按键
+  19          sbit K1 = P3^2;
+  20          sbit K2 = P3^3; 
+  21          sbit K3 = P3^4; // 外部中断INT0
+  22          sbit K4 = P3^5; // 外部中断INT1
+  23          
+  24          // 蜂鸣�?
+  25          sbit BEEP = P1^0;
+  26          
+  27          int main()
+  28          {
+  29   1        LcdInital(); // 初始化LCD1602
+  30   1        Ds1302TimeInit(); // 设置Ds1302默认时间为 2003/2/24 11:45:14
+  31   1        
+  32   1        while(1)
+  33   1        {
+  34   2          
+  35   2          Screen1Display(); // 屏幕默认显示的数据
+  36   2          LcdReadDisplay(); // 读取Ds1302时间并显示
+  37   2      
+  38   2      
+  39   2          // 调整时间 
+  40   2          #ifdef _TIME_ADJUST_
+  41   2      
+  42   2          TimeAdjust();
+  43   2      
+  44   2          #endif
+  45   2      
+  46   2      
+  47   2          // 设置闹钟
+  48   2          #ifdef _SET_ALARM_
+  49   2      
+  50   2          SetAlarm();
+  51   2          AlarmBeep();
+  52   2      
+  53   2      
+  54   2          #endif
+C51 COMPILER V9.60.0.0   ELECTRICCLOCK                                                     07/08/2022 00:05:41 PAGE 2   
+
+  55   2      
+  56   2          
+  57   2          DelayMs(50);    
+  58   2        } 
+  59   1      }
+  60          
+  61          
+  62          // 显示屏默认显示
+  63          void Screen1Display()
+  64          {
+  65   1        LcdWriteString (FIRST_LINE,   0, "DATE");
+  66   1        LcdWriteString (SECOND_LINE,  0, "TIME");
+  67   1        LcdWriteChar   (SECOND_LINE,  10, 0x3a);    //':'
+  68   1        LcdWriteChar   (SECOND_LINE,  13, 0x3a);
+  69   1        LcdWriteChar   (FIRST_LINE,   10, 0x2d);    //'-'
+  70   1        LcdWriteChar   (FIRST_LINE,   13, 0x2d);
+  71   1        
+  72   1        LcdWriteChar   (FIRST_LINE,   6, '2');
+  73   1        LcdWriteChar   (FIRST_LINE,   7, '0');
+  74   1      }
+  75          
+  76          
+  77          // 时钟的默认时间
+  78          void Ds1302TimeInit()
+  79          {
+  80   1        Ds1302WriteProtect(FALSE); // 关闭写保护
+  81   1        
+  82   1        // 2003/02/24
+  83   1        Ds1302WriteByte(WRITE_YEAR,   DatToBcd(3));
+  84   1        Ds1302WriteByte(WRITE_MONTH,  DatToBcd(2));
+  85   1        Ds1302WriteByte(WRITE_DAY,    DatToBcd(24));
+  86   1      
+  87   1        // 11:45:14
+  88   1        Ds1302WriteByte(WRITE_HOUR,   DatToBcd(11));
+  89   1        Ds1302WriteByte(WRITE_MINUTE, DatToBcd(45));
+  90   1        Ds1302WriteByte(WRITE_SECOND, DatToBcd(14));
+  91   1      
+  92   1        Ds1302WriteProtect(TRUE);  // 打开写保护 
+  93   1      }
+  94          
+  95          
+  96          // 从DS1302中读取时间并显示
+  97          void LcdReadDisplay()
+  98          {
+  99   1        // 获取DS1302中的时间并储存到结构体SReadTime中
+ 100   1        // 读取的是BCD码，需要转换为DAT
+ 101   1        
+ 102   1        Ds1302WriteProtect(FALSE); // 关闭写保护
+ 103   1        
+ 104   1        SReadTime.byYear   = BcdToDat(Ds1302ReadByte(READ_YEAR));
+ 105   1        SReadTime.byMonth  = BcdToDat(Ds1302ReadByte(READ_MONTH));
+ 106   1        SReadTime.byDay    = BcdToDat(Ds1302ReadByte(READ_DAY));
+ 107   1        SReadTime.byHour   = BcdToDat(Ds1302ReadByte(READ_HOUR));
+ 108   1        SReadTime.byMinute = BcdToDat(Ds1302ReadByte(READ_MINUTE));
+ 109   1        SReadTime.bySecond = BcdToDat(Ds1302ReadByte(READ_SECOND));
+ 110   1      
+ 111   1        Ds1302WriteProtect(TRUE);  // 打开写保护
+ 112   1      
+ 113   1        // 分解位个位和十位
+ 114   1        
+ 115   1        SReadTime.byDay1    = 0x30 + (SReadTime.byDay    & 0x0f);
+ 116   1        SReadTime.byDay2    = 0x30 + (SReadTime.byDay    & 0xf0);
+C51 COMPILER V9.60.0.0   ELECTRICCLOCK                                                     07/08/2022 00:05:41 PAGE 3   
+
+ 117   1      
+ 118   1        SReadTime.byMonth1  = 0x30 + (SReadTime.byMonth  & 0x0f);
+ 119   1        SReadTime.byMonth2  = 0x30 + (SReadTime.byMonth  & 0xf0);
+ 120   1      
+ 121   1        SReadTime.byYear1   = 0x30 + (SReadTime.byYear   & 0x0f);
+ 122   1        SReadTime.byYear2   = 0x30 + (SReadTime.byYear   & 0xf0);
+ 123   1      
+ 124   1        SReadTime.bySecond1 = 0x30 + (SReadTime.bySecond & 0x0f);
+ 125   1        SReadTime.bySecond2 = 0x30 + (SReadTime.bySecond & 0xf0);
+ 126   1      
+ 127   1        SReadTime.byMinute1 = 0x30 + (SReadTime.byMinute & 0x0f);
+ 128   1        SReadTime.byMinute2 = 0x30 + (SReadTime.byMinute & 0xf0);
+ 129   1      
+ 130   1        SReadTime.byHour1   = 0x30 + (SReadTime.byHour   & 0x0f);
+ 131   1        SReadTime.byHour2   = 0x30 + (SReadTime.byHour   & 0xf0);
+ 132   1      
+ 133   1        // lcd1602显示数据
+ 134   1        // 第一行日期
+ 135   1        LcdWriteChar(FIRST_LINE,  15, SReadTime.byDay1);
+ 136   1        LcdWriteChar(FIRST_LINE,  14, SReadTime.byDay2);
+ 137   1      
+ 138   1        LcdWriteChar(FIRST_LINE,  12, SReadTime.byMonth1);
+ 139   1        LcdWriteChar(FIRST_LINE,  11, SReadTime.byMonth2);
+ 140   1      
+ 141   1        LcdWriteChar(FIRST_LINE,  9,  SReadTime.byYear1);
+ 142   1        LcdWriteChar(FIRST_LINE,  8,  SReadTime.byYear2);
+ 143   1        
+ 144   1        // 第二行时间
+ 145   1        LcdWriteChar(SECOND_LINE, 14, SReadTime.bySecond2);
+ 146   1      
+ 147   1        LcdWriteChar(SECOND_LINE, 12, SReadTime.byMinute1);
+ 148   1        LcdWriteChar(SECOND_LINE, 11, SReadTime.byMinute2);
+ 149   1      
+ 150   1        LcdWriteChar(SECOND_LINE, 9,  SReadTime.byHour1);
+ 151   1        LcdWriteChar(SECOND_LINE, 8,  SReadTime.byHour2);
+ 152   1        
+ 153   1        LcdWriteChar(SECOND_LINE, 15, SReadTime.bySecond1); // 为使光标处于第二行最后一列，勿调�
+             -�
+ 154   1      }
+ 155          
+ 156          
+ 157          // ***************调整时间功能***************
+ 158          
+ 159          #ifdef _TIME_ADJUST_
+ 160          
+ 161          // 时间调整
+ 162          void TimeAdjust()
+ 163          {
+ 164   1      
+ 165   1        // 触发中断开始
+ 166   1        if(TimeAdjustFlag)
+ 167   1        { 
+ 168   2          // 界面初始化
+ 169   2          Screen2Init();
+ 170   2          Screen2Display();
+ 171   2          LcdReadDisplay();
+ 172   2      
+ 173   2          while(TimeAdjustFlag)
+ 174   2          {
+ 175   3            // 再次按下 K3 退出中断
+ 176   3            if(K3 == 0)
+ 177   3            { 
+C51 COMPILER V9.60.0.0   ELECTRICCLOCK                                                     07/08/2022 00:05:41 PAGE 4   
+
+ 178   4              DelayMs(10);
+ 179   4              if(K3 == 0);
+ 180   4              {
+ 181   5                TimeAdjustFlag = FALSE;
+ 182   5              }
+ 183   4            } 
+ 184   3      
+ 185   3            // 改变LCD1602数字
+ 186   3            LcdChangeDigit();
+*** WARNING C206 IN LINE 186 OF ..\Source\ElectricClock.c: 'LcdChangeDigit': missing function-prototype
+ 187   3      
+ 188   3            // 读取lcd1602写入Ds1302
+ 189   3            LcdToDs1302(SSavedTime);
+*** ERROR C181 IN LINE 189 OF ..\Source\ElectricClock.c: incompatible operand
+ 190   3          }
+ 191   2        } 
+ 192   1      }
+ 193          
+ 194          
+ 195          // “更改时间”界面初始化
+ 196          void Screen2Init()
+ 197          {
+ 198   1        LcdClear(); // 清屏
+ 199   1        // 显示屏开显示
+ 200   1        // 显示光标
+ 201   1        // 光标闪烁
+ 202   1        LcdWriteCommand(0x0f);
+ 203   1      }
+ 204          
+ 205          
+ 206          // “调整时间”界面
+ 207          void Screen2Display()
+ 208          {
+ 209   1        LcdClear(); // 清屏
+ 210   1      
+ 211   1        LcdWriteString(FIRST_LINE,    0, "Time");
+ 212   1        LcdWriteString(SECOND_LINE,   0, "Adjust");
+ 213   1        LcdWriteChar  (SECOND_LINE,   10, 0x3a);     //':'
+ 214   1        LcdWriteChar  (SECOND_LINE,   13, 0x3a);
+ 215   1        LcdWriteChar  (FIRST_LINE,    10, 0x2d);     //'-'
+ 216   1        LcdWriteChar  (FIRST_LINE,    13, 0x2d);
+ 217   1        
+ 218   1        LcdWriteChar  (FIRST_LINE,    6, '2');
+ 219   1        LcdWriteChar  (FIRST_LINE,    7, '0');
+ 220   1      }
+ 221          
+ 222          
+ 223          // 更改LCD1602屏幕上的数字
+ 224          // K1 左移
+ 225          // K2 +1
+ 226          void LcdChangeDigit()
+ 227          {
+*** ERROR C231 IN LINE 227 OF ..\Source\ElectricClock.c: 'LcdChangeDigit': redefinition
+ 228   1        BYTE PlusNum = 0; // 加数
+ 229   1        int PlusTime = 0; // 增加的次数
+ 230   1        BOOL LineFeedFlag = FALSE; // 换行标志
+ 231   1        
+ 232   1        // 按下K1光标左移1位
+ 233   1        if(K1 == 0)
+ 234   1        {
+ 235   2          DelayMs(10);
+ 236   2          if(K1 == 0)
+C51 COMPILER V9.60.0.0   ELECTRICCLOCK                                                     07/08/2022 00:05:41 PAGE 5   
+
+ 237   2          {
+ 238   3            // 左移15位后，下一位换行到第1行
+ 239   3            if(PlusTime == 16)
+ 240   3            {
+ 241   4              // 光标归位
+ 242   4              LcdCursorReturn();
+ 243   4              
+ 244   4              
+ 245   4              // 光标右移15位
+ 246   4              for(int i = 0; i < 16; i++)
+*** ERROR C141 IN LINE 246 OF ..\Source\ElectricClock.c: syntax error near 'int', expected 'sizeof'
+*** ERROR C202 IN LINE 246 OF ..\Source\ElectricClock.c: 'i': undefined identifier
+*** ERROR C202 IN LINE 246 OF ..\Source\ElectricClock.c: 'i': undefined identifier
+*** ERROR C202 IN LINE 246 OF ..\Source\ElectricClock.c: 'i': undefined identifier
+*** ERROR C141 IN LINE 246 OF ..\Source\ElectricClock.c: syntax error near ')', expected ';'
+ 247   4              {
+ 248   5                LcdCursorMove(CURSOR_MOVE_RIGHT); // 光标右移
+ 249   5              }
+ 250   4        
+ 251   4            }
+ 252   3          
+ 253   3            LcdCursorMove(CURSOR_MOVE_LEFT); // 光标左移1位
+ 254   3            PlusTime++;     
+ 255   3            LineFeedFlag = TRUE; // 启用换行标志  
+ 256   3          } 
+ 257   2        }
+ 258   1      
+ 259   1        // 按下K2更改光标位置数字
+ 260   1        // 数字从0开始到9
+ 261   1        if(K2 == 0)
+ 262   1        {
+ 263   2          DelayMs(10);
+ 264   2          if(K2 == 0)
+ 265   2          {
+ 266   3            // 如果换行，加数重置为0
+ 267   3            // 如果加数大于9，加数重置为0
+ 268   3            if(LineFeedFlag == TURE || PlusNum > 9)
+*** ERROR C202 IN LINE 268 OF ..\Source\ElectricClock.c: 'TURE': undefined identifier
+ 269   3            {
+ 270   4              PlusNum = 0;
+ 271   4            }
+ 272   3            
+ 273   3            LcdWriteData(DatToBcd(PlusNum)); // 显示更改后的数字
+ 274   3            PlusNum++;             //  加数+1   
+ 275   3          }
+ 276   2        }
+ 277   1      }
+*** ERROR C231 IN LINE 277 OF ..\Source\ElectricClock.c: 'LcdChangeDigit': redefinition
+ 278          
+ 279          
+ 280          // 读取lcd1602写入Ds1302，调整时间
+ 281          void LcdToDs1302(ReadTime* STime)
+ 282          {
+ 283   1        
+ 284   1        // 储存LCD1602显示的数据
+ 285   1        SReadTime.bySecond1 = LcdReadChar(SECOND_LINE, 15);
+ 286   1        SReadTime.bySecond2 = LcdReadChar(SECOND_LINE, 14);
+ 287   1      
+ 288   1        SReadTime.byMinute1 = LcdReadChar(SECOND_LINE, 12);
+ 289   1        SReadTime.byMinute2 = LcdReadChar(SECOND_LINE, 11);
+ 290   1      
+ 291   1        SReadTime.byHour1   = LcdReadChar(SECOND_LINE,  9);
+C51 COMPILER V9.60.0.0   ELECTRICCLOCK                                                     07/08/2022 00:05:41 PAGE 6   
+
+ 292   1        SReadTime.byHour2   = LcdReadChar(SECOND_LINE,  8);
+ 293   1      
+ 294   1        SReadTime.byDay1    = LcdReadChar(FIRST_LINE,  14);
+ 295   1        SReadTime.byDay2    = LcdReadChar(FIRST_LINE,  15);
+ 296   1      
+ 297   1        SReadTime.byMonth1  = LcdReadChar(FIRST_LINE,  11);
+ 298   1        SReadTime.byMonth2  = LcdReadChar(FIRST_LINE,  12);
+ 299   1      
+ 300   1        SReadTime.byYear1   = LcdReadChar(FIRST_LINE,   9);
+ 301   1        SReadTime.byYear2   = LcdReadChar(FIRST_LINE,   8);
+ 302   1      
+ 303   1        // 合并十位和个位
+ 304   1        SReadTime.bySecond = SReadTime.bySecond1 + SReadTime.bySecond2 * 10;
+ 305   1        SReadTime.byMinute = SReadTime.byMinute1 + SReadTime.byMinute2 * 10;
+ 306   1        SReadTime.byHour   = SReadTime.byHour1   + SReadTime.byHour2   * 10;
+ 307   1        SReadTime.byDay    = SReadTime.byDay1    + SReadTime.byDay2    * 10;
+ 308   1        SReadTime.byMonth  = SReadTime.byMonth1  + SReadTime.byMonth2  * 10;
+ 309   1        SReadTime.byYear   = SReadTime.byYear1   + SReadTime.byYear2   * 10;
+ 310   1      
+ 311   1        // 写入DS1302
+ 312   1        Ds1302WriteProtect(FALSE); // 关闭写保护
+ 313   1        
+ 314   1        Ds1302WriteByte(WRITE_SECOND, DatToBcd(SReadTime.bySecond));
+ 315   1        Ds1302WriteByte(WRITE_MINUTE, DatToBcd(SReadTime.byMinute));
+ 316   1        Ds1302WriteByte(WRITE_HOUR,   DatToBcd(SReadTime.byHour));
+ 317   1        Ds1302WriteByte(WRITE_DAY,    DatToBcd(SReadTime.byDay));
+ 318   1        Ds1302WriteByte(WRITE_MONTH,  DatToBcd(SReadTime.byMonth));
+ 319   1        Ds1302WriteByte(WRITE_YEAR,   DatToBcd(SReadTime.byYear));
+ 320   1      
+ 321   1        Ds1302WriteProtect(TRUE); // 打开写保护
+ 322   1      }
+ 323          
+ 324          
+ 325          #endif
+ 326          
+ 327          
+ 328          // ***************设置闹钟***************
+ 329          // 有些函数在#ifdef _TIME_ADJUST_里，如屏蔽则部分功能无法实现
+ 330          
+ 331          #ifdef _SET_ALARM_
+ 332          
+ 333          // 设置闹钟
+ 334          void SetAlarm()
+ 335          {
+ 336   1        if(SetAlarmFlag == TRUE)
+ 337   1        {
+ 338   2          
+ 339   2          // 初始化屏幕3
+ 340   2          Screen3Init();
+ 341   2          Screen3Display();
+ 342   2      
+ 343   2          while(SetAlarmFlag == TRUE)
+ 344   2          {
+ 345   3            // 再次按下K4退出屏幕3
+ 346   3            if(K4 == 0)
+ 347   3            {
+ 348   4              DelayMs(10);
+ 349   4              if(K4 == 0)
+ 350   4              {
+ 351   5                SetAlarmFlag == FALSE;
+ 352   5              }
+ 353   4            }
+C51 COMPILER V9.60.0.0   ELECTRICCLOCK                                                     07/08/2022 00:05:41 PAGE 7   
+
+ 354   3            
+ 355   3            // 设置闹钟时间
+ 356   3            LcdChangeDigit();
+ 357   3            
+ 358   3          }
+ 359   2          
+ 360   2          // 将Lcd1602时间储存到DS1302
+ 361   2          LcdToDs1302(SAlarmTime); 
+*** ERROR C181 IN LINE 361 OF ..\Source\ElectricClock.c: incompatible operand
+ 362   2        }
+ 363   1      }
+ 364          
+ 365          
+ 366          // 到达设定时间，蜂鸣器发声
+ 367          void AlarmBeep()
+ 368          {
+ 369   1        if(memcmp(&SReadTime, &SAlarmTime, sizeof(ReadTime)) == 0)
+ 370   1        {
+ 371   2          for(int i = 0; i < 2000; i++)
+ 372   2          {
+ 373   3            BEEP = 1;
+ 374   3            DelayMs(20);
+ 375   3            BEEP = 0;
+ 376   3          }
+ 377   2        }
+ 378   1      }
+ 379          
+ 380          
+ 381          // 屏幕3初始化
+ 382          void Screen3Init()
+ 383          {
+ 384   1        LcdClear(); // 清屏
+ 385   1        // 显示屏开显示
+ 386   1        // 显示光标
+ 387   1        // 光标闪烁
+ 388   1        LcdWriteCommand(0x0f);
+ 389   1      }
+ 390          
+ 391          
+ 392          // “闹钟设置”界面
+ 393          void Screen3Display()
+ 394          {
+ 395   1        LcdClear(); //清屏
+ 396   1        LcdWriteString(SECOND_LINE, 0,  "ALARM");
+ 397   1        LcdWriteString(FIRST_LINE,  0,  "SET     NanodAaa");
+ 398   1        LcdWriteChar  (SECOND_LINE, 8,  '0');
+ 399   1        LcdWriteChar  (SECOND_LINE, 9,  '0');
+ 400   1        LcdWriteChar  (SECOND_LINE, 11, '0');
+ 401   1        LcdWriteChar  (SECOND_LINE, 12, '0');
+ 402   1        LcdWriteChar  (SECOND_LINE, 14, '0');
+ 403   1      
+ 404   1        LcdWriteChar  (SECOND_LINE, 10, 0x3a); //':'
+ 405   1        LcdWriteChar  (SECOND_LINE, 13, 0x3a);
+ 406   1        
+ 407   1        LcdWriteChar  (SECOND_LINE, 15, '0'); //不要动
+ 408   1        LcdWriteCommand(0x10);
+ 409   1      }
+ 410          
+ 411          #endif
+ 412          
+ 413          
+ 414          
+C51 COMPILER V9.60.0.0   ELECTRICCLOCK                                                     07/08/2022 00:05:41 PAGE 8   
+
+ 415          // ***************其他函数***************
+ 416          
+ 417          // 外部中断0 K3控制
+ 418          void INT0_SET()
+ 419          {
+ 420   1        EA = 1;
+ 421   1        EX0 = 1;
+ 422   1        IT0 = 1;
+ 423   1      }
+ 424          
+ 425          
+ 426          // 外部中断0 功能
+ 427          void INT0_FUNC() interrupt 1
+ 428          {
+ 429   1        if(TimeAdjustFlag == FALSE)
+ 430   1        {
+ 431   2          TimeAdjustFlag = TRUE;
+ 432   2        }
+ 433   1      }
+ 434          
+ 435          
+ 436          // 外部中断1 K4控制
+ 437          void INT1_SET()
+ 438          {
+ 439   1        EA = 1;
+ 440   1        EX1 = 1;
+ 441   1        IT1 = 1;
+ 442   1      }
+ 443          
+ 444          
+ 445          void INT1_FUNC() interrupt 2
+ 446          {
+ 447   1        if(SetAlarmFlag == FALSE)
+ 448   1        {
+ 449   2          SetAlarmFlag = TRUE;
+ 450   2        }
+ 451   1      }
+ 452          
+ 453          
+
+C51 COMPILATION COMPLETE.  1 WARNING(S),  10 ERROR(S)

@@ -1,0 +1,306 @@
+C51 COMPILER V9.60.0.0   LCD1602                                                           07/08/2022 00:05:42 PAGE 1   
+
+
+C51 COMPILER V9.60.0.0, COMPILATION OF MODULE LCD1602
+OBJECT MODULE PLACED IN .\Objects\LCD1602.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE ..\Source\LCD1602.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\
+                    -Listings\LCD1602.lst) TABS(2) OBJECT(.\Objects\LCD1602.obj)
+
+line level    source
+
+   1          /*
+   2              LCD1602.c
+   3          */
+   4          
+   5          #include "intrins.h"
+   6          #include "ElectricClock.h"
+   7          
+   8          #define HW_ELECTTRONIC_CLOCK
+   9          
+  10          #ifdef HW_ELECTTRONIC_CLOCK
+  11            sbit EN = P2^7;   // 使能控制
+  12            sbit RW = P2^6;   // 读写选择
+  13            sbit RS = P2^5;   // 寄存器选择
+  14          #else
+                sbit EN = P2^7;   // 使能控制
+                sbit RS = P2^6;   // 寄存器选择
+                sbit RW = P2^5;   // 读写选择
+              #endif
+  19          
+  20          
+  21          // lcd初始化
+  22          void LcdInital()
+  23          {
+  24   1        LcdDefaultMode();             // 默认功能设置
+  25   1        DelayMs(5);
+  26   1        LcdWriteCommand(0x08);          // 显示屏关显示、不显示光标、光标闪烁
+  27   1        LcdClear();               // 清屏
+  28   1        LcdSetInputMode(CURSOR_MOVE_RIGHT);   // 输入时光标右移，AC + 1
+  29   1        LcdDisplayControl();          // 显示开关控制
+  30   1      }
+  31          
+  32          
+  33          // 检测繁忙 
+  34          // 返回 “1” 标识1602内部忙
+  35          bit LcdCheckBusy()
+  36          {
+  37   1        RS = 0;
+  38   1        RW = 1;
+  39   1        EN = 0;
+  40   1        _nop_();
+  41   1        EN = 1;
+  42   1        
+  43   1        return (LCD & 0x80); // 保留DB7
+  44   1      }
+  45          
+  46          
+  47          // lcd写指令
+  48          void LcdWriteCommand(BYTE byCommand) 
+  49          {
+  50   1        //while(LcdCheckBusy());  // 检测繁忙
+  51   1        RS = 0;
+  52   1        RW = 0;
+  53   1        EN = 1; 
+  54   1        LCD = byCommand;
+C51 COMPILER V9.60.0.0   LCD1602                                                           07/08/2022 00:05:42 PAGE 2   
+
+  55   1        _nop_();
+  56   1        EN = 0;
+  57   1        
+  58   1        DelayMs(2);
+  59   1      }
+  60          
+  61          
+  62          // lcd写数据
+  63          void LcdWriteData(BYTE byData)
+  64          {
+  65   1        //while(LcdCheckBusy());
+  66   1        
+  67   1        RS = 1;
+  68   1        RW = 0;
+  69   1        EN = 1;
+  70   1        LCD = byData;
+  71   1        _nop_();
+  72   1        EN = 0; 
+  73   1      }
+  74          
+  75          
+  76          // lcd写字符
+  77          void LcdWriteChar(LcdScreenLine line, int row, BYTE byChar)
+  78          {
+  79   1        // 第1行
+  80   1        if(line == FIRST_LINE)
+  81   1        { 
+  82   2          LcdWriteCommand(0x80 + row);
+  83   2        }
+  84   1        // 第2行
+  85   1        else if(line == SECOND_LINE)
+  86   1        {
+  87   2          LcdWriteCommand(0xc0 + row);
+  88   2        }
+  89   1      
+  90   1        
+  91   1        LcdWriteData(byChar);
+  92   1      
+  93   1        DelayMs(2); 
+  94   1      }
+  95          
+  96          
+  97          // lcd写字符串
+  98          void LcdWriteString(LcdScreenLine line, int row, BYTE* byString)
+  99          {
+ 100   1        if(line == FIRST_LINE)
+ 101   1        {
+ 102   2          LcdWriteCommand(0x80 + row);
+ 103   2        }
+ 104   1        else if(line == SECOND_LINE)
+ 105   1        {
+ 106   2          LcdWriteCommand(0xc0 + row);
+ 107   2        }
+ 108   1      
+ 109   1        while(*byString)
+ 110   1        {
+ 111   2          LcdWriteData(*byString);
+ 112   2          byString++;
+ 113   2        }
+ 114   1      }
+ 115          
+ 116          
+C51 COMPILER V9.60.0.0   LCD1602                                                           07/08/2022 00:05:42 PAGE 3   
+
+ 117          // lcd读取数据
+ 118          BYTE LcdReadData()
+ 119          {
+ 120   1        BYTE byData;
+ 121   1      
+ 122   1        RS = 1;
+ 123   1        RW = 1;
+ 124   1        EN = 1;
+ 125   1        byData = LCD;
+ 126   1      
+ 127   1        return byData;
+ 128   1      }
+ 129          
+ 130          
+ 131          // lcd读取字符
+ 132          BYTE LcdReadChar(LcdScreenLine line, int row)
+ 133          {
+ 134   1        BYTE byData;
+ 135   1      
+ 136   1        while(LcdCheckBusy());
+ 137   1      
+ 138   1        if(line == FIRST_LINE)
+ 139   1        {
+ 140   2          LcdWriteCommand(0x80 + row);
+ 141   2        }
+ 142   1        else if(line == SECOND_LINE)
+ 143   1        {
+ 144   2          LcdWriteCommand(0xc0 + row);
+ 145   2        }
+ 146   1      
+ 147   1        byData = LcdReadData(); // 读取数据
+ 148   1        
+ 149   1        return byData;
+ 150   1      }
+ 151          
+ 152          
+ 153          // lcd清屏
+ 154          void LcdClear()
+ 155          {
+ 156   1        LcdWriteCommand(0x01);
+ 157   1      }
+ 158          
+ 159          
+ 160          // lcd光标归位
+ 161          void LcdCursorReturn()
+ 162          {
+ 163   1        LcdWriteCommand(0x02);
+ 164   1      }
+ 165          
+ 166          
+ 167          // 设置输入模式
+ 168          void LcdSetInputMode(CursorMoveMode mode)
+ 169          {
+ 170   1        // 默认输入字符时显示屏全部显示不移动， S = 0 
+ 171   1        switch(mode)
+ 172   1        {
+ 173   2          // 输入时 光标左移 AC - 1
+ 174   2          case CURSOR_MOVE_LEFT:
+ 175   2            LcdWriteCommand(0x04);
+ 176   2            break;
+ 177   2          
+ 178   2          // 输入时 光标右移，AC + 1
+C51 COMPILER V9.60.0.0   LCD1602                                                           07/08/2022 00:05:42 PAGE 4   
+
+ 179   2          case CURSOR_MOVE_RIGHT:
+ 180   2            LcdWriteCommand(0x06);
+ 181   2            break;
+ 182   2        }
+ 183   1      }
+ 184          
+ 185          
+ 186          // 显示开关控制
+ 187          void LcdDisplayControl()
+ 188          {
+ 189   1        // 默认显示屏开显示      D=1
+ 190   1        // 默认不显示光标          C=0 
+ 191   1        // 默认光标不闪烁          B=0 
+ 192   1        // 0000 1100
+ 193   1        
+ 194   1        LcdWriteCommand(0x0c);
+ 195   1      }
+ 196          
+ 197          
+ 198          // 光标显示移动
+ 199          void LcdCursorMove(CursorMoveMode DIRECTION)
+ 200          {
+ 201   1        switch(DIRECTION)
+ 202   1        {
+ 203   2          // 光标左移1格，AC - 1
+ 204   2          case CURSOR_MOVE_LEFT:
+ 205   2            LcdWriteCommand(0x18);
+ 206   2            DelayMs(1);
+ 207   2            break;
+ 208   2          
+ 209   2          // 光标右移1格，AC + 1
+ 210   2          case CURSOR_MOVE_RIGHT:
+ 211   2            LcdWriteCommand(0x14);
+ 212   2            DelayMs(1);
+ 213   2            break;
+ 214   2        }
+ 215   1      }
+ 216          
+ 217          
+ 218          // 默认功能设置
+ 219          void LcdDefaultMode()
+ 220          {
+ 221   1        // 默认8位数据总线
+ 222   1        // 默认2行显示模式
+ 223   1        // 默认5x7点阵/字符
+ 224   1      
+ 225   1        LcdWriteCommand(0x38);
+ 226   1      }
+ 227          
+ 228          
+ 229          // 设置DDRAM地址
+ 230          // 范围 40H-67H
+ 231          void LcdSetDDRAM(BYTE address)
+ 232          {
+ 233   1        LcdWriteCommand(address);
+ 234   1        
+ 235   1      }
+ 236          
+ 237          
+ 238          // 延时函数
+ 239          void DelayUs(BYTE tu)
+ 240          {
+C51 COMPILER V9.60.0.0   LCD1602                                                           07/08/2022 00:05:42 PAGE 5   
+
+ 241   1        while(--tu);
+ 242   1      }
+ 243          
+ 244          
+ 245          void DelayMs(BYTE tm)
+ 246          {
+ 247   1        while(tm--)
+ 248   1        {
+ 249   2          DelayUs(248);
+ 250   2          DelayUs(248);
+ 251   2        }
+ 252   1      }
+ 253          
+ 254          
+ 255          
+ 256          
+ 257          
+ 258          
+ 259          
+ 260          
+ 261          
+ 262          
+ 263          
+ 264          
+ 265          
+ 266          
+ 267          
+ 268          
+ 269          
+ 270          
+ 271          
+ 272          
+ 273          
+ 274          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    303    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----      13
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

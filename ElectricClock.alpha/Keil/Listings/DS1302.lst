@@ -1,0 +1,126 @@
+C51 COMPILER V9.60.0.0   DS1302                                                            07/08/2022 00:24:28 PAGE 1   
+
+
+C51 COMPILER V9.60.0.0, COMPILATION OF MODULE DS1302
+OBJECT MODULE PLACED IN .\Objects\DS1302.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE ..\Source\DS1302.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\L
+                    -istings\DS1302.lst) TABS(2) OBJECT(.\Objects\DS1302.obj)
+
+line level    source
+
+   1          /*
+   2                驱动DS1302相关函数
+   3          */
+   4          
+   5          #include "reg51.h"
+   6          #include "main.h"
+   7          #include "DS1302.h"
+   8          
+   9          sbit TIO = P3^4;   //输入、输出引脚
+  10          sbit TRST = P3^5;  //使能端
+  11          sbit TSCLK = P3^6; //输入时钟脉冲
+  12          
+  13          //写入1字节数据
+  14          void ds1302_write_data(unsigned char cmd, unsigned char dat)
+  15          {
+  16   1        unsigned char i;
+  17   1        
+  18   1        TRST = 0;
+  19   1        TSCLK = 0;
+  20   1        TRST = 1; //上升沿允许写数据
+  21   1        
+  22   1        //写入命令
+  23   1        for(i = 0; i < 8; i++)
+  24   1        {
+  25   2          TSCLK = 0;
+  26   2          TIO = cmd&0x01; //从最低位开始传送
+  27   2          TSCLK = 1;
+  28   2          cmd >>= 1;
+  29   2        }
+  30   1        
+  31   1        //写入数据
+  32   1        for(i = 0; i < 8; i++)
+  33   1        {
+  34   2          TSCLK = 0;
+  35   2          TIO = dat&0x01;
+  36   2          TSCLK = 1;
+  37   2          dat >>= 1; 
+  38   2        }
+  39   1        
+  40   1        TRST = 0; //拉低禁止写数据
+  41   1      }
+  42          
+  43          //读1字节数据
+  44          unsigned char ds1302_read(unsigned char cmd)
+  45          {
+  46   1        unsigned char dat, i;
+  47   1        
+  48   1        TRST = 0;
+  49   1        TSCLK = 0;
+  50   1        TRST = 1; //上升沿允许写数据
+  51   1        
+  52   1        //写入命令
+  53   1        for(i = 0; i < 8; i++)
+  54   1        {
+C51 COMPILER V9.60.0.0   DS1302                                                            07/08/2022 00:24:28 PAGE 2   
+
+  55   2          TSCLK = 0;
+  56   2          TIO = cmd&0x01;
+  57   2          TSCLK = 1;
+  58   2          cmd >>= 1;
+  59   2        }
+  60   1        
+  61   1        //读出数据
+  62   1        for(i = 0; i < 8; i++)
+  63   1        {
+  64   2          TSCLK = 0;
+  65   2          dat >>= 1;
+  66   2          if(TIO)
+  67   2          {
+  68   3            dat |= 0x80; //按位异或
+  69   3          }
+  70   2          TSCLK = 1;
+  71   2        }
+  72   1        
+  73   1        TRST = 0; //拉低禁止写数据
+  74   1        
+  75   1        return dat;
+  76   1      }
+  77          
+  78          //2位数据转BCD
+  79          unsigned char dat_to_BCD(unsigned char dat)
+  80          {
+  81   1        unsigned char dat1, dat2;
+  82   1        
+  83   1        dat1 = dat / 10;
+  84   1        dat2 = dat % 10;
+  85   1        dat2 = dat2 + dat1 * 16;
+  86   1        
+  87   1        return dat2;
+  88   1      }
+  89          
+  90          //BCD转2位数据
+  91          unsigned char BCD_to_dat(unsigned char dat)
+  92          {
+  93   1        unsigned char dat1, dat2;
+  94   1        
+  95   1        dat1 = dat / 16;
+  96   1        dat2 = dat % 16;
+  97   1        dat2 = dat2 + dat1 * 10;
+  98   1        
+  99   1        return dat2;
+ 100   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    167    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

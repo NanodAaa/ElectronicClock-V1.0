@@ -1,0 +1,499 @@
+C51 COMPILER V9.60.0.0   MAIN                                                              07/08/2022 00:26:45 PAGE 1   
+
+
+C51 COMPILER V9.60.0.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\Objects\main.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE ..\Source\main.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Lis
+                    -tings\main.lst) TABS(2) OBJECT(.\Objects\main.obj)
+
+line level    source
+
+   1          /*
+   2                DS1302 x LCD1602 时钟，附带闹钟功能
+   3          */
+   4          
+   5          
+   6          #include "reg51.h"
+   7          #include "LCD1602.h"
+   8          #include "DS1302.h"
+   9          
+  10          bit Keyflag0; //INT0标志
+  11          bit Keyflag1; //INT1标志
+  12          
+  13          //独立按键
+  14          sbit K1 = P3^2;
+  15          sbit K2 = P3^3;
+  16          sbit K3 = P3^4; //INT0
+  17          sbit K4 = P3^5; //INT1
+  18          
+  19          //全局时间变量
+  20          unsigned char g_sec;
+  21          unsigned char g_sec1; //秒1位
+  22          unsigned char g_sec2; //秒10位
+  23          unsigned char g_min;
+  24          unsigned char g_min1; //分1位
+  25          unsigned char g_min2; //分10位
+  26          unsigned char g_hou;  
+  27          unsigned char g_hou1; //时1位
+  28          unsigned char g_hou2; //时10位
+  29          unsigned char g_day;
+  30          unsigned char g_day1; //日1位
+  31          unsigned char g_day2; //日10位
+  32          unsigned char g_mon; 
+  33          unsigned char g_mon1; //月1位
+  34          unsigned char g_mon2; //月10位
+  35          unsigned char g_yea;
+  36          unsigned char g_yea1; //年1位
+  37          unsigned char g_yea2; //年10位
+  38          
+  39          //屏幕2储存时间变量
+  40          unsigned char s_sec1; //秒1位
+  41          unsigned char s_sec2; //秒10位
+  42          unsigned char s_sec;
+  43          unsigned char s_min;
+  44          unsigned char s_min1; //分1位
+  45          unsigned char s_min2; //分10位
+  46          unsigned char s_hou;
+  47          unsigned char s_hou1; //时1位
+  48          unsigned char s_hou2; //时10位
+  49          unsigned char s_day;
+  50          unsigned char s_day1; //日1位
+  51          unsigned char s_day2; //日10位
+  52          unsigned char s_mon;
+  53          unsigned char s_mon1; //月1位
+  54          unsigned char s_mon2; //月10位
+C51 COMPILER V9.60.0.0   MAIN                                                              07/08/2022 00:26:45 PAGE 2   
+
+  55          unsigned char s_yea;
+  56          unsigned char s_yea1; //年1位
+  57          unsigned char s_yea2; //年10位
+  58          
+  59          //闹钟时间变量
+  60          unsigned char a_sec1;
+  61          unsigned char a_sec2;
+  62          unsigned char a_min1;
+  63          unsigned char a_min2;
+  64          unsigned char a_hou1;
+  65          unsigned char a_hou2;
+  66          
+  67          void DelayUs(unsigned char tu);
+  68          void DelayMs(unsigned char tm);
+  69          void Screen_interface();
+  70          void Screen2_interface();
+  71          void Screen2_digit_save();
+  72          void Screen2_digit_interface();
+  73          void Screen3_interface();
+  74          void Time_display();
+  75          void Alarm_set();
+  76          void INT0_S();
+  77          void INT0_Z();
+  78          void INT1_S();
+  79          void INT1_Z();
+  80          void Clock_display();
+  81          void Clock_initial_value();
+  82          void Date_display();
+  83          void Time_Adjust();
+  84          void Clock_value_adjust();
+  85          
+  86          
+  87          void main()
+  88          {
+  89   1        //初始化
+  90   1        //T0_S();
+  91   1        Clock_initial_value(); //设置时钟初值
+  92   1        INT0_S();
+  93   1        INT1_S();
+  94   1        lcd1602_init();
+  95   1        lcd1602_clear();
+  96   1        
+  97   1        //主循环
+  98   1        while(1)
+  99   1        {
+ 100   2          //时间、日期显示
+ 101   2          Clock_display();
+ 102   2          
+ 103   2        
+ 104   2          //时间调节
+ 105   2          Time_Adjust();
+ 106   2          
+ 107   2          //闹钟设置
+ 108   2          Alarm_set();
+ 109   2          
+ 110   2          DelayMs(50); //屏幕刷新率 50ms
+ 111   2        }
+ 112   1      }
+ 113          
+ 114          //屏幕1、2界面
+ 115          void Screen_interface()
+ 116          {
+C51 COMPILER V9.60.0.0   MAIN                                                              07/08/2022 00:26:45 PAGE 3   
+
+ 117   1        lcd1602_write_string(0, 0, "Date");
+ 118   1        lcd1602_write_string(1, 0, "Time");
+ 119   1        lcd1602_write_char(1, 10, 0x3a); //':'
+ 120   1        lcd1602_write_char(1, 13, 0x3a);
+ 121   1        lcd1602_write_char(0, 10, 0x2d); //'-'
+ 122   1        lcd1602_write_char(0, 13, 0x2d);
+ 123   1        
+ 124   1        lcd1602_write_char(0, 6, '2');
+ 125   1        lcd1602_write_char(0, 7, '0');
+ 126   1      }
+ 127          
+ 128          void Screen2_interface()
+ 129          {
+ 130   1        lcd1602_write_string(1, 0, "Adjust");
+ 131   1        lcd1602_write_string(0, 0, "Time");
+ 132   1        lcd1602_write_char(1, 10, 0x3a); //':'
+ 133   1        lcd1602_write_char(1, 13, 0x3a);
+ 134   1        lcd1602_write_char(0, 10, 0x2d); //'-'
+ 135   1        lcd1602_write_char(0, 13, 0x2d);
+ 136   1        
+ 137   1        lcd1602_write_char(0, 6, '2');
+ 138   1        lcd1602_write_char(0, 7, '0');
+ 139   1      }
+ 140          
+ 141          //屏幕2数字储存
+ 142          void Screen2_digit_save()
+ 143          {
+ 144   1        s_sec1 = g_sec1; //秒1位
+ 145   1        s_sec2 = g_sec2; //秒10位
+ 146   1      
+ 147   1        s_min1 = g_min1; //分1位
+ 148   1        s_min2 = g_min2; //分10位
+ 149   1      
+ 150   1        s_hou1 = g_hou1; //时1位
+ 151   1        s_hou2 = g_hou2; //时10位
+ 152   1      
+ 153   1        s_day1 = g_day1; //日1位
+ 154   1        s_day2 = g_day2; //日10位
+ 155   1      
+ 156   1        s_mon1 = g_mon1; //月1位
+ 157   1        s_mon2 = g_mon2; //月10位
+ 158   1      
+ 159   1        s_yea1 = g_yea1; //年1位
+ 160   1        s_yea2 = g_yea2; //年10位
+ 161   1      }
+ 162          
+ 163          //屏幕2数字显示
+ 164          void Screen2_digit_interface()
+ 165          {
+ 166   1        Screen2_digit_save();
+ 167   1        
+ 168   1        lcd1602_write_char(1, 14, s_sec2);
+ 169   1        
+ 170   1        lcd1602_write_char(1, 12, s_min1);
+ 171   1        lcd1602_write_char(1, 11, s_min2);
+ 172   1        lcd1602_write_char(1, 9, s_hou1);
+ 173   1        lcd1602_write_char(1, 8, s_hou2);
+ 174   1        lcd1602_write_char(0, 14, s_day2);
+ 175   1        lcd1602_write_char(0, 15, s_day1);
+ 176   1        lcd1602_write_char(0, 11, s_mon2);
+ 177   1        lcd1602_write_char(0, 12, s_mon1);
+ 178   1        lcd1602_write_char(0, 9, s_yea2);
+C51 COMPILER V9.60.0.0   MAIN                                                              07/08/2022 00:26:45 PAGE 4   
+
+ 179   1        lcd1602_write_char(0, 8, s_yea1);
+ 180   1        
+ 181   1        lcd1602_write_char(1, 15, s_sec1); //固定位置，别动！
+ 182   1      }
+ 183          
+ 184          //屏幕3界面
+ 185          void Screen3_interface()
+ 186          {
+ 187   1        lcd1602_clear(); //清屏
+ 188   1        lcd1602_write_string(1, 0, "ALARM");
+ 189   1        lcd1602_write_string(0, 0, "SET     NanodAaa");
+ 190   1        lcd1602_write_char(1, 8, '0');
+ 191   1        lcd1602_write_char(1, 9, '0');
+ 192   1        lcd1602_write_char(1, 11, '0');
+ 193   1        lcd1602_write_char(1, 12, '0');
+ 194   1        lcd1602_write_char(1, 14, '0');
+ 195   1      
+ 196   1        lcd1602_write_char(1, 10, 0x3a); //':'
+ 197   1        lcd1602_write_char(1, 13, 0x3a);
+ 198   1        
+ 199   1        lcd1602_write_char(1, 15, '0'); //不要动
+ 200   1        write_lcd1602_command(0x10);
+ 201   1      }
+ 202          
+ 203          //屏幕1时钟总显示
+ 204          void Clock_display()
+ 205          {
+ 206   1        Screen_interface();
+ 207   1        Time_display();
+ 208   1        Date_display();
+ 209   1      }
+ 210          
+ 211          //调用ds1302显示时间
+ 212          void Time_display()
+ 213          {
+ 214   1        //读取秒数
+ 215   1        ds1302_write_data(0x8e, 0);
+ 216   1        g_sec = BCD_to_dat(ds1302_read(0x81)); 
+ 217   1        ds1302_write_data(0x8e, 0x80);
+ 218   1        //秒位显示
+ 219   1        g_sec1 = 0x30 + (g_sec % 10);
+ 220   1        g_sec2 = 0x30 + (g_sec / 10);
+ 221   1        lcd1602_write_char(1, 15, g_sec1);
+ 222   1        lcd1602_write_char(1, 14, g_sec2);
+ 223   1        
+ 224   1        //读取分数
+ 225   1        ds1302_write_data(0x8e, 0);
+ 226   1        g_min = BCD_to_dat(ds1302_read(0x83)); 
+ 227   1        ds1302_write_data(0x8e, 0x80);
+ 228   1        //分位显示
+ 229   1        g_min1 = 0x30 + (g_min % 10);
+ 230   1        g_min2 = 0x30 + (g_min / 10);
+ 231   1        lcd1602_write_char(1, 12, g_min1);
+ 232   1        lcd1602_write_char(1, 11, g_min2);
+ 233   1        
+ 234   1        //读取时数
+ 235   1        ds1302_write_data(0x8e, 0);
+ 236   1        g_hou = BCD_to_dat(ds1302_read(0x85)); 
+ 237   1        ds1302_write_data(0x8e, 0x80);
+ 238   1        //时位显示
+ 239   1        g_hou1 = 0x30 + (g_hou % 10);
+ 240   1        g_hou2 = 0x30 + (g_hou / 10);
+C51 COMPILER V9.60.0.0   MAIN                                                              07/08/2022 00:26:45 PAGE 5   
+
+ 241   1        lcd1602_write_char(1, 9, g_hou1);
+ 242   1        lcd1602_write_char(1, 8, g_hou2);
+ 243   1      }
+ 244          
+ 245          //调用DS1302显示日期
+ 246          void Date_display()
+ 247          {
+ 248   1        //读取日期
+ 249   1        ds1302_write_data(0x8e, 0);
+ 250   1        g_day = BCD_to_dat(ds1302_read(0x87)); 
+ 251   1        ds1302_write_data(0x8e, 0x80);
+ 252   1        
+ 253   1        //向lcd1602写入日期
+ 254   1        g_day1 = 0x30 + (g_day % 10);
+ 255   1        g_day2 = 0x30 + (g_day / 10);
+ 256   1        lcd1602_write_char(0, 14, g_day2);
+ 257   1        lcd1602_write_char(0, 15, g_day1);
+ 258   1        
+ 259   1        //读取月
+ 260   1        ds1302_write_data(0x8e, 0);
+ 261   1        g_mon = BCD_to_dat(ds1302_read(0x89)); 
+ 262   1        ds1302_write_data(0x8e, 0x80);
+ 263   1        
+ 264   1        //向lcd1602写入月份
+ 265   1        g_mon1 = 0x30 + (g_mon % 10);
+ 266   1        g_mon2 = 0x30 + (g_mon / 10);
+ 267   1        lcd1602_write_char(0, 11, g_mon2);
+ 268   1        lcd1602_write_char(0, 12, g_mon1);
+ 269   1        
+ 270   1        //读取年份
+ 271   1        ds1302_write_data(0x8e, 0);
+ 272   1        g_yea = BCD_to_dat(ds1302_read(0x8d)); 
+ 273   1        ds1302_write_data(0x8e, 0x80);
+ 274   1        
+ 275   1        //向lcd1602写入年份
+ 276   1        g_yea1 = 0x30 + (g_yea % 10);
+ 277   1        g_yea2 = 0x30 + (g_yea / 10);
+ 278   1        lcd1602_write_char(0, 9, g_yea2);
+ 279   1        lcd1602_write_char(0, 8, g_yea1);
+ 280   1      }
+ 281          
+ 282          //闹钟设置
+ 283          void Alarm_set()
+ 284          {
+ 285   1        if(Keyflag1 == 1)
+ 286   1        {
+ 287   2          //屏幕三
+ 288   2          lcd1602_alarm_init(); //闹钟设置初始化命令
+ 289   2          Screen3_interface(); //屏幕三界面
+ 290   2          
+ 291   2          //按下K4进入屏幕三
+ 292   2          while(Keyflag1 == 1)
+ 293   2          {
+ 294   3            lcd1602_course_move(); //光标移动指令
+ 295   3            lcd1602_change_number(); //改变lcd1602屏幕数字
+ 296   3            
+ 297   3            DelayMs(200); //设置屏幕三刷新频率
+ 298   3                
+ 299   3            //再次按下K4退出屏幕3
+ 300   3            if(K4 == 0)
+ 301   3            {
+ 302   4              DelayMs(10); //消抖
+C51 COMPILER V9.60.0.0   MAIN                                                              07/08/2022 00:26:45 PAGE 6   
+
+ 303   4              if(K4 == 0)
+ 304   4              {
+ 305   5                while(K4 == 0);
+ 306   5                
+ 307   5                //读取数据,作为闹钟响铃时间
+ 308   5                a_hou1 = read_lcd1602_char(1, 8);
+ 309   5                a_hou2 = read_lcd1602_char(1, 9);
+ 310   5                a_min1 = read_lcd1602_char(1, 11);
+ 311   5                a_min2 = read_lcd1602_char(1, 12);
+ 312   5                a_hou1 = read_lcd1602_char(1, 14);
+ 313   5                a_hou2 = read_lcd1602_char(1, 15);
+ 314   5                
+ 315   5                lcd1602_clear(); //清屏
+ 316   5                write_lcd1602_command(0x0c); //显示屏开显示、不显示光标、光标闪烁
+ 317   5                Keyflag1 = 0; //重置Keyflag1
+ 318   5              }
+ 319   4            }
+ 320   3          }   
+ 321   2        }
+ 322   1      }
+ 323          
+ 324          //调整时钟时间
+ 325          void Time_Adjust()
+ 326          {
+ 327   1        if(Keyflag0 == 1)
+ 328   1        {
+ 329   2          lcd1602_clear();            //清屏
+ 330   2          lcd1602_alarm_init();       //光标闪烁
+ 331   2          Screen2_interface();         //屏幕2界面
+ 332   2          Screen2_digit_interface();  //屏幕2数字显示
+ 333   2          write_lcd1602_command(0x10);
+ 334   2          
+ 335   2          while(Keyflag0 == 1)
+ 336   2          {
+ 337   3            lcd1602_course_move(); //光标移动指令
+ 338   3            lcd1602_change_number(); //改变lcd1602屏幕数字
+ 339   3            
+ 340   3            DelayMs(200); //设置屏幕2刷新率
+ 341   3            
+ 342   3            //按下K3退出屏幕2
+ 343   3            if(K3 == 0)
+ 344   3            {
+ 345   4              DelayMs(10);
+ 346   4              if(K3 == 0)
+ 347   4              {
+ 348   5                while(K3 == 0);
+ 349   5                
+ 350   5                Clock_value_adjust();
+ 351   5                
+ 352   5                lcd1602_clear(); //清屏
+ 353   5                write_lcd1602_command(0x0c); //显示屏开显示、不显示光标、光标闪烁
+ 354   5                Keyflag0 = 0;
+ 355   5              }
+ 356   4            }
+ 357   3          }
+ 358   2        }
+ 359   1      }
+ 360          
+ 361          //给时钟写入调整后的初值
+ 362          void Clock_value_adjust()
+ 363          {
+ 364   1        s_sec1 = read_lcd1602_char(1, 15);
+C51 COMPILER V9.60.0.0   MAIN                                                              07/08/2022 00:26:45 PAGE 7   
+
+ 365   1        s_sec2 = read_lcd1602_char(1, 14);
+ 366   1        s_sec = s_sec1 + s_sec2 * 10;
+ 367   1        
+ 368   1        s_min1 = read_lcd1602_char(1, 11);
+ 369   1        s_min2 = read_lcd1602_char(1, 12);
+ 370   1        s_min = s_min1 + s_min2 * 10;
+ 371   1        
+ 372   1        s_hou1 = read_lcd1602_char(1, 14);
+ 373   1        s_hou2 = read_lcd1602_char(1, 15);
+ 374   1        s_hou = s_hou1 + s_hou2 * 10;
+ 375   1        
+ 376   1        ds1302_write_data(0x8e, 0); //关闭写保护
+ 377   1        ds1302_write_data(0x80, s_sec); 
+ 378   1        ds1302_write_data(0x8e, 0x80); //开启写保护
+ 379   1      }
+ 380          
+ 381          //时钟初值设置
+ 382          void Clock_initial_value()
+ 383          {
+ 384   1        ds1302_write_data(0x8e, 0); //关闭写保护
+ 385   1        ds1302_write_data(0x80, 0x1e);       //秒初值
+ 386   1        ds1302_write_data(0x82, dat_to_BCD(30)); //分初值
+ 387   1        ds1302_write_data(0x84, dat_to_BCD(10)); //时初值
+ 388   1        ds1302_write_data(0x86, dat_to_BCD(18)); //日
+ 389   1        ds1302_write_data(0x88, dat_to_BCD(3)); //月
+ 390   1        ds1302_write_data(0x8c, dat_to_BCD(22)); //年 
+ 391   1        ds1302_write_data(0x8e, 0x80); //开启写保护
+ 392   1      }
+ 393          
+ 394          /*
+ 395          //闹钟响铃
+ 396          void Alarm_start()
+ 397          {
+ 398            unsigned char i;
+ 399            if(s_hou1 == a_hou1 && s_hou2 == a_hou2 && s_min1 == a_min1 && s_min2 == a_min2 && s_sec1 == a_sec1 && s_
+             -sec2 == a_sec2)
+ 400            {
+ 401              for(i = 0; i < 3000; i++)
+ 402              {
+ 403                BEEP();
+ 404              }
+ 405            }
+ 406          }
+ 407          */
+ 408          
+ 409          
+ 410          
+ 411          
+ 412          
+ 413          //外部中断INT0设置
+ 414          void INT0_S()
+ 415          {
+ 416   1        EA = 1;
+ 417   1        EX0 = 1;
+ 418   1        IT0 = 1;
+ 419   1      }
+ 420          
+ 421          //外部中断INT0功能
+ 422          void INT0_Z() interrupt 1
+ 423          {
+ 424   1        if(Keyflag0 == 0)
+ 425   1        {
+C51 COMPILER V9.60.0.0   MAIN                                                              07/08/2022 00:26:45 PAGE 8   
+
+ 426   2          Keyflag0 = 1;
+ 427   2        } 
+ 428   1      } 
+ 429          
+ 430          //外部中断INT1设置
+ 431          void INT1_S()
+ 432          {
+ 433   1        EA = 1;
+ 434   1        EX1 = 1;
+ 435   1        IT1 = 1;
+ 436   1      }
+ 437          
+ 438          //外部中断INT1功能
+ 439          void INT1_Z() interrupt 2
+ 440          {
+ 441   1        if(Keyflag1 == 0)
+ 442   1        {
+ 443   2          Keyflag1 = 1;
+ 444   2        }
+ 445   1      }
+ 446          
+ 447          //延时函数
+ 448          void DelayUs(unsigned char tu)
+ 449          {
+ 450   1        while(--tu);
+ 451   1      }
+ 452          
+ 453          void DelayMs(unsigned char tm)
+ 454          {
+ 455   1        while(tm--)
+ 456   1        {
+ 457   2          DelayUs(248);
+ 458   2          DelayUs(248);
+ 459   2        }
+ 460   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   1236    ----
+   CONSTANT SIZE    =     40    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     42    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      2    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
